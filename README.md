@@ -1,6 +1,6 @@
-# Open Lovable
+# WebBuilder
 
-Chat with AI to build React apps instantly. An example app made by the [Firecrawl](https://firecrawl.dev/?ref=open-lovable-github) team. For a complete cloud solution, check out [Lovable.dev](https://lovable.dev/) ❤️.
+Build beautiful websites with AI, in seconds. An AI-powered website builder that generates React apps from your descriptions.
 
 <img src="https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExbmZtaHFleGRsMTNlaWNydGdianI4NGQ4dHhyZjB0d2VkcjRyeXBucCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/ZFVLWMa6dVskQX0qu1/giphy.gif" alt="Open Lovable Demo" width="100%"/>
 
@@ -8,8 +8,8 @@ Chat with AI to build React apps instantly. An example app made by the [Firecraw
 
 1. **Clone & Install**
 ```bash
-git clone https://github.com/firecrawl/open-lovable.git
-cd open-lovable
+git clone https://github.com/your-username/webbuilder.git
+cd webbuilder
 pnpm install  # or npm install / yarn install
 ```
 
@@ -17,17 +17,9 @@ pnpm install  # or npm install / yarn install
 
 ```env
 # =================================================================
-# REQUIRED
-# =================================================================
-FIRECRAWL_API_KEY=your_firecrawl_api_key    # https://firecrawl.dev
-
-# =================================================================
-# AI PROVIDER - Choose your LLM
+# REQUIRED - AI Provider
 # =================================================================
 GEMINI_API_KEY=your_gemini_api_key        # https://aistudio.google.com/app/apikey
-ANTHROPIC_API_KEY=your_anthropic_api_key  # https://console.anthropic.com
-OPENAI_API_KEY=your_openai_api_key        # https://platform.openai.com
-GROQ_API_KEY=your_groq_api_key            # https://console.groq.com
 
 # =================================================================
 # FAST APPLY (Optional - for faster edits)

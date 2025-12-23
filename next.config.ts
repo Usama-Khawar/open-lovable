@@ -1,14 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'www.google.com',
-      },
-    ],
-  },
+  // No external image domains configured
 };
 
 export default nextConfig;

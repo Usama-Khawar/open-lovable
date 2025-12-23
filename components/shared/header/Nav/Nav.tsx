@@ -106,7 +106,7 @@ export const NAV_ITEMS = [
                   />
                 ),
                 label: "MCP",
-                description: "Connect Firecrawl to agents",
+                description: "Connect WebBuilder to agents",
                 href: "https://docs.firecrawl.dev/features/mcp",
                 iconClassName: "-mt-1",
               },
@@ -172,7 +172,7 @@ export const NAV_ITEMS = [
         sideItem={{
           icon: <ArrowRight />,
           label: "Customer stories",
-          description: "Browse Firecrawl success stories",
+          description: "Browse WebBuilder success stories",
           href: "/blog/category/customer-stories",
         }}
         sideLabel="Customer Stories"
@@ -268,7 +268,7 @@ export const NAV_ITEMS = [
               {
                 icon: <Changelog />,
                 label: "Changelog",
-                description: "Latest APl updates for Firecrawl",
+                description: "Latest APl updates for WebBuilder",
                 href: "/changelog",
               },
               {
@@ -299,7 +299,7 @@ export const NAV_ITEMS = [
               {
                 icon: <MCPIcon />,
                 label: "MCP",
-                description: "Connect Firecrawl to agents",
+                description: "Connect WebBuilder to agents",
                 href: "https://docs.firecrawl.dev/features/mcp",
               },
             ],
