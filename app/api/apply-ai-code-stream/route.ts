@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { parseMorphEdits, applyMorphEditToFile } from '@/lib/morph-fast-apply';
+import { applyMorphEditToFile, parseMorphEdits } from "@/lib/morph-fast-apply";
+import { NextRequest, NextResponse } from "next/server";
 // Sandbox import not needed - using global sandbox from sandbox-manager
-import type { SandboxState } from '@/types/sandbox';
-import type { ConversationState } from '@/types/conversation';
-import { sandboxManager } from '@/lib/sandbox/sandbox-manager';
+import { sandboxManager } from "@/lib/sandbox/sandbox-manager";
+import type { ConversationState } from "@/types/conversation";
+import type { SandboxState } from "@/types/sandbox";
 
 declare global {
   var conversationState: ConversationState | null;
@@ -27,34 +27,45 @@ function parseAIResponse(response: string): ParsedResponse {
     commands: [] as string[],
     packages: [] as string[],
     structure: null as string | null,
-    explanation: '',
-    template: ''
+    explanation: "",
+    template: "",
   };
 
   // Function to extract packages from import statements
   function extractPackagesFromCode(content: string): string[] {
     const packages: string[] = [];
     // Match ES6 imports
-    const importRegex = /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+\w+|\w+))*\s+from\s+)?['"]([^'"]+)['"]/g;
+    const importRegex =
+      /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+\w+|\w+))*\s+from\s+)?['"]([^'"]+)['"]/g;
     let importMatch;
 
     while ((importMatch = importRegex.exec(content)) !== null) {
       const importPath = importMatch[1];
       // Skip relative imports and built-in React
-      if (!importPath.startsWith('.') && !importPath.startsWith('/') &&
-        importPath !== 'react' && importPath !== 'react-dom' &&
-        !importPath.startsWith('@/')) {
+      if (
+        !importPath.startsWith(".") &&
+        !importPath.startsWith("/") &&
+        importPath !== "react" &&
+        importPath !== "react-dom" &&
+        !importPath.startsWith("@/")
+      ) {
         // Extract package name (handle scoped packages like @heroicons/react)
-        const packageName = importPath.startsWith('@')
-          ? importPath.split('/').slice(0, 2).join('/')
-          : importPath.split('/')[0];
+        const packageName = importPath.startsWith("@")
+          ? importPath.split("/").slice(0, 2).join("/")
+          : importPath.split("/")[0];
 
         if (!packages.includes(packageName)) {
           packages.push(packageName);
 
           // Log important packages for debugging
-          if (packageName === 'react-router-dom' || packageName.includes('router') || packageName.includes('icon')) {
-            console.log(`[apply-ai-code-stream] Detected package from imports: ${packageName}`);
+          if (
+            packageName === "react-router-dom" ||
+            packageName.includes("router") ||
+            packageName.includes("icon")
+          ) {
+            console.log(
+              `[apply-ai-code-stream] Detected package from imports: ${packageName}`
+            );
           }
         }
       }
@@ -72,7 +83,9 @@ function parseAIResponse(response: string): ParsedResponse {
   while ((match = fileRegex.exec(response)) !== null) {
     const filePath = match[1];
     const content = match[2].trim();
-    const hasClosingTag = response.substring(match.index, match.index + match[0].length).includes('</file>');
+    const hasClosingTag = response
+      .substring(match.index, match.index + match[0].length)
+      .includes("</file>");
 
     // Check if this file already exists in our map
     const existing = fileMap.get(filePath);
@@ -83,18 +96,36 @@ function parseAIResponse(response: string): ParsedResponse {
       shouldReplace = true; // First occurrence
     } else if (!existing.isComplete && hasClosingTag) {
       shouldReplace = true; // Replace incomplete with complete
-      console.log(`[apply-ai-code-stream] Replacing incomplete ${filePath} with complete version`);
-    } else if (existing.isComplete && hasClosingTag && content.length > existing.content.length) {
+      console.log(
+        `[apply-ai-code-stream] Replacing incomplete ${filePath} with complete version`
+      );
+    } else if (
+      existing.isComplete &&
+      hasClosingTag &&
+      content.length > existing.content.length
+    ) {
       shouldReplace = true; // Replace with longer complete version
-      console.log(`[apply-ai-code-stream] Replacing ${filePath} with longer complete version`);
-    } else if (!existing.isComplete && !hasClosingTag && content.length > existing.content.length) {
+      console.log(
+        `[apply-ai-code-stream] Replacing ${filePath} with longer complete version`
+      );
+    } else if (
+      !existing.isComplete &&
+      !hasClosingTag &&
+      content.length > existing.content.length
+    ) {
       shouldReplace = true; // Both incomplete, keep longer one
     }
 
     if (shouldReplace) {
       // Additional validation: reject obviously broken content
-      if (content.includes('...') && !content.includes('...props') && !content.includes('...rest')) {
-        console.warn(`[apply-ai-code-stream] Warning: ${filePath} contains ellipsis, may be truncated`);
+      if (
+        content.includes("...") &&
+        !content.includes("...props") &&
+        !content.includes("...rest")
+      ) {
+        console.warn(
+          `[apply-ai-code-stream] Warning: ${filePath} contains ellipsis, may be truncated`
+        );
         // Still use it if it's the only version we have
         if (!existing) {
           fileMap.set(filePath, { content, isComplete: hasClosingTag });
@@ -108,12 +139,14 @@ function parseAIResponse(response: string): ParsedResponse {
   // Convert map to array for sections.files
   for (const [path, { content, isComplete }] of fileMap.entries()) {
     if (!isComplete) {
-      console.log(`[apply-ai-code-stream] Warning: File ${path} appears to be truncated (no closing tag)`);
+      console.log(
+        `[apply-ai-code-stream] Warning: File ${path} appears to be truncated (no closing tag)`
+      );
     }
 
     sections.files.push({
       path,
-      content
+      content,
     });
 
     // Extract packages from file content
@@ -121,7 +154,9 @@ function parseAIResponse(response: string): ParsedResponse {
     for (const pkg of filePackages) {
       if (!sections.packages.includes(pkg)) {
         sections.packages.push(pkg);
-        console.log(`[apply-ai-code-stream] 📦 Package detected from imports: ${pkg}`);
+        console.log(
+          `[apply-ai-code-stream] 📦 Package detected from imports: ${pkg}`
+        );
       }
     }
   }
@@ -133,7 +168,7 @@ function parseAIResponse(response: string): ParsedResponse {
     const content = match[2].trim();
     sections.files.push({
       path: filePath,
-      content: content
+      content: content,
     });
 
     // Extract packages from file content
@@ -141,7 +176,9 @@ function parseAIResponse(response: string): ParsedResponse {
     for (const pkg of filePackages) {
       if (!sections.packages.includes(pkg)) {
         sections.packages.push(pkg);
-        console.log(`[apply-ai-code-stream] 📦 Package detected from imports: ${pkg}`);
+        console.log(
+          `[apply-ai-code-stream] 📦 Package detected from imports: ${pkg}`
+        );
       }
     }
   }
@@ -151,33 +188,55 @@ function parseAIResponse(response: string): ParsedResponse {
   if (generatedFilesMatch) {
     // Split by comma first, then trim whitespace, to preserve filenames with dots
     const filesList = generatedFilesMatch[1]
-      .split(',')
-      .map(f => f.trim())
-      .filter(f => f.endsWith('.jsx') || f.endsWith('.js') || f.endsWith('.tsx') || f.endsWith('.ts') || f.endsWith('.css') || f.endsWith('.json') || f.endsWith('.html'));
-    console.log(`[apply-ai-code-stream] Detected generated files from plain text: ${filesList.join(', ')}`);
+      .split(",")
+      .map((f) => f.trim())
+      .filter(
+        (f) =>
+          f.endsWith(".jsx") ||
+          f.endsWith(".js") ||
+          f.endsWith(".tsx") ||
+          f.endsWith(".ts") ||
+          f.endsWith(".css") ||
+          f.endsWith(".json") ||
+          f.endsWith(".html")
+      );
+    console.log(
+      `[apply-ai-code-stream] Detected generated files from plain text: ${filesList.join(
+        ", "
+      )}`
+    );
 
     // Try to extract the actual file content if it follows
     for (const fileName of filesList) {
       // Look for the file content after the file name
-      const fileContentRegex = new RegExp(`${fileName}[\\s\\S]*?(?:import[\\s\\S]+?)(?=Generated Files:|Applying code|$)`, 'i');
+      const fileContentRegex = new RegExp(
+        `${fileName}[\\s\\S]*?(?:import[\\s\\S]+?)(?=Generated Files:|Applying code|$)`,
+        "i"
+      );
       const fileContentMatch = response.match(fileContentRegex);
       if (fileContentMatch) {
         // Extract just the code part (starting from import statements)
         const codeMatch = fileContentMatch[0].match(/^(import[\s\S]+)$/m);
         if (codeMatch) {
-          const filePath = fileName.includes('/') ? fileName : `src/components/${fileName}`;
+          const filePath = fileName.includes("/")
+            ? fileName
+            : `src/components/${fileName}`;
           sections.files.push({
             path: filePath,
-            content: codeMatch[1].trim()
+            content: codeMatch[1].trim(),
           });
-          console.log(`[apply-ai-code-stream] Extracted content for ${filePath}`);
+          console.log(
+            `[apply-ai-code-stream] Extracted content for ${filePath}`
+          );
 
           // Extract packages from this file
           const filePackages = extractPackagesFromCode(codeMatch[1]);
           for (const pkg of filePackages) {
             if (!sections.packages.includes(pkg)) {
               sections.packages.push(pkg);
-              console.log(`[apply-ai-code-stream] Package detected from imports: ${pkg}`);
+              console.log(
+                `[apply-ai-code-stream] Package detected from imports: ${pkg}`
+              );
             }
           }
         }
@@ -186,20 +245,25 @@ function parseAIResponse(response: string): ParsedResponse {
   }
 
   // Also try to parse if the response contains raw JSX/JS code blocks
-  const codeBlockRegex = /```(?:jsx?|tsx?|javascript|typescript)?\n([\s\S]*?)```/g;
+  const codeBlockRegex =
+    /```(?:jsx?|tsx?|javascript|typescript)?\n([\s\S]*?)```/g;
   while ((match = codeBlockRegex.exec(response)) !== null) {
     const content = match[1].trim();
     // Try to detect the file name from comments or context
-    const fileNameMatch = content.match(/\/\/\s*(?:File:|Component:)\s*([^\n]+)/);
+    const fileNameMatch = content.match(
+      /\/\/\s*(?:File:|Component:)\s*([^\n]+)/
+    );
     if (fileNameMatch) {
       const fileName = fileNameMatch[1].trim();
-      const filePath = fileName.includes('/') ? fileName : `src/components/${fileName}`;
+      const filePath = fileName.includes("/")
+        ? fileName
+        : `src/components/${fileName}`;
 
       // Don't add duplicate files
-      if (!sections.files.some(f => f.path === filePath)) {
+      if (!sections.files.some((f) => f.path === filePath)) {
         sections.files.push({
           path: filePath,
-          content: content
+          content: content,
         });
 
         // Extract packages
@@ -231,9 +295,10 @@ function parseAIResponse(response: string): ParsedResponse {
   if (packagesMatch) {
     const packagesContent = packagesMatch[1].trim();
     // Split by newlines or commas
-    const packagesList = packagesContent.split(/[\n,]+/)
-      .map(pkg => pkg.trim())
-      .filter(pkg => pkg.length > 0);
+    const packagesList = packagesContent
+      .split(/[\n,]+/)
+      .map((pkg) => pkg.trim())
+      .filter((pkg) => pkg.length > 0);
     sections.packages.push(...packagesList);
   }
 
@@ -263,39 +328,55 @@ function parseAIResponse(response: string): ParsedResponse {
 
 export async function POST(request: NextRequest) {
   try {
-    const { response, isEdit = false, packages = [], sandboxId } = await request.json();
+    const {
+      response,
+      isEdit = false,
+      packages = [],
+      sandboxId,
+    } = await request.json();
 
     if (!response) {
-      return NextResponse.json({
-        error: 'response is required'
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "response is required",
+        },
+        { status: 400 }
+      );
     }
 
     // Debug log the response
-    console.log('[apply-ai-code-stream] Received response to parse:');
-    console.log('[apply-ai-code-stream] Response length:', response.length);
-    console.log('[apply-ai-code-stream] Response preview:', response.substring(0, 500));
-    console.log('[apply-ai-code-stream] isEdit:', isEdit);
-    console.log('[apply-ai-code-stream] packages:', packages);
+    console.log("[apply-ai-code-stream] Received response to parse:");
+    console.log("[apply-ai-code-stream] Response length:", response.length);
+    console.log(
+      "[apply-ai-code-stream] Response preview:",
+      response.substring(0, 500)
+    );
+    console.log("[apply-ai-code-stream] isEdit:", isEdit);
+    console.log("[apply-ai-code-stream] packages:", packages);
 
     // Parse the AI response
     const parsed = parseAIResponse(response);
     const morphEnabled = Boolean(isEdit && process.env.MORPH_API_KEY);
     const morphEdits = morphEnabled ? parseMorphEdits(response) : [];
-    console.log('[apply-ai-code-stream] Morph Fast Apply mode:', morphEnabled);
+    console.log("[apply-ai-code-stream] Morph Fast Apply mode:", morphEnabled);
     if (morphEnabled) {
-      console.log('[apply-ai-code-stream] Morph edits found:', morphEdits.length);
+      console.log(
+        "[apply-ai-code-stream] Morph edits found:",
+        morphEdits.length
+      );
     }
-    
+
     // Log what was parsed
-    console.log('[apply-ai-code-stream] Parsed result:');
-    console.log('[apply-ai-code-stream] Files found:', parsed.files.length);
+    console.log("[apply-ai-code-stream] Parsed result:");
+    console.log("[apply-ai-code-stream] Files found:", parsed.files.length);
     if (parsed.files.length > 0) {
-      parsed.files.forEach(f => {
-        console.log(`[apply-ai-code-stream] - ${f.path} (${f.content.length} chars)`);
+      parsed.files.forEach((f) => {
+        console.log(
+          `[apply-ai-code-stream] - ${f.path} (${f.content.length} chars)`
+        );
       });
     }
-    console.log('[apply-ai-code-stream] Packages found:', parsed.packages);
+    console.log("[apply-ai-code-stream] Packages found:", parsed.packages);
 
     // Initialize existingFiles if not already
     if (!global.existingFiles) {
@@ -303,7 +384,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Try to get provider from sandbox manager first
-    let provider = sandboxId ? sandboxManager.getProvider(sandboxId) : sandboxManager.getActiveProvider();
+    let provider = sandboxId
+      ? sandboxManager.getProvider(sandboxId)
+      : sandboxManager.getActiveProvider();
 
     // Fall back to global state if not found in manager
     if (!provider) {
@@ -312,14 +395,18 @@ export async function POST(request: NextRequest) {
 
     // If we have a sandboxId but no provider, try to get or create one
     if (!provider && sandboxId) {
-      console.log(`[apply-ai-code-stream] No provider found for sandbox ${sandboxId}, attempting to get or create...`);
+      console.log(
+        `[apply-ai-code-stream] No provider found for sandbox ${sandboxId}, attempting to get or create...`
+      );
 
       try {
         provider = await sandboxManager.getOrCreateProvider(sandboxId);
 
         // If we got a new provider (not reconnected), we need to create a new sandbox
         if (!provider.getSandboxInfo()) {
-          console.log(`[apply-ai-code-stream] Creating new sandbox since reconnection failed for ${sandboxId}`);
+          console.log(
+            `[apply-ai-code-stream] Creating new sandbox since reconnection failed for ${sandboxId}`
+          );
           await provider.createSandbox();
           await provider.setupViteApp();
           sandboxManager.registerSandbox(sandboxId, provider);
@@ -327,31 +414,45 @@ export async function POST(request: NextRequest) {
 
         // Update legacy global state
         global.activeSandboxProvider = provider;
-        console.log(`[apply-ai-code-stream] Successfully got provider for sandbox ${sandboxId}`);
+        console.log(
+          `[apply-ai-code-stream] Successfully got provider for sandbox ${sandboxId}`
+        );
       } catch (providerError) {
-        console.error(`[apply-ai-code-stream] Failed to get or create provider for sandbox ${sandboxId}:`, providerError);
-        return NextResponse.json({
-          success: false,
-          error: `Failed to create sandbox provider for ${sandboxId}. The sandbox may have expired.`,
-          results: {
-            filesCreated: [],
-            packagesInstalled: [],
-            commandsExecuted: [],
-            errors: [`Sandbox provider creation failed: ${(providerError as Error).message}`]
+        console.error(
+          `[apply-ai-code-stream] Failed to get or create provider for sandbox ${sandboxId}:`,
+          providerError
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Failed to create sandbox provider for ${sandboxId}. The sandbox may have expired.`,
+            results: {
+              filesCreated: [],
+              packagesInstalled: [],
+              commandsExecuted: [],
+              errors: [
+                `Sandbox provider creation failed: ${
+                  (providerError as Error).message
+                }`,
+              ],
+            },
+            explanation: parsed.explanation,
+            structure: parsed.structure,
+            parsedFiles: parsed.files,
+            message: `Parsed ${parsed.files.length} files but couldn't apply them - sandbox reconnection failed.`,
           },
-          explanation: parsed.explanation,
-          structure: parsed.structure,
-          parsedFiles: parsed.files,
-          message: `Parsed ${parsed.files.length} files but couldn't apply them - sandbox reconnection failed.`
-        }, { status: 500 });
+          { status: 500 }
+        );
       }
     }
 
     // If we still don't have a provider, create a new one
     if (!provider) {
-      console.log(`[apply-ai-code-stream] No active provider found, creating new sandbox...`);
+      console.log(
+        `[apply-ai-code-stream] No active provider found, creating new sandbox...`
+      );
       try {
-        const { SandboxFactory } = await import('@/lib/sandbox/factory');
+        const { SandboxFactory } = await import("@/lib/sandbox/factory");
         provider = SandboxFactory.create();
         const sandboxInfo = await provider.createSandbox();
         await provider.setupViteApp();
@@ -363,26 +464,42 @@ export async function POST(request: NextRequest) {
         global.activeSandboxProvider = provider;
         global.sandboxData = {
           sandboxId: sandboxInfo.sandboxId,
-          url: sandboxInfo.url
+          url: sandboxInfo.url,
         };
 
         console.log(`[apply-ai-code-stream] Created new sandbox successfully`);
       } catch (createError) {
-        console.error(`[apply-ai-code-stream] Failed to create new sandbox:`, createError);
-        return NextResponse.json({
-          success: false,
-          error: `Failed to create new sandbox: ${createError instanceof Error ? createError.message : 'Unknown error'}`,
-          results: {
-            filesCreated: [],
-            packagesInstalled: [],
-            commandsExecuted: [],
-            errors: [`Sandbox creation failed: ${createError instanceof Error ? createError.message : 'Unknown error'}`]
+        console.error(
+          `[apply-ai-code-stream] Failed to create new sandbox:`,
+          createError
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Failed to create new sandbox: ${
+              createError instanceof Error
+                ? createError.message
+                : "Unknown error"
+            }`,
+            results: {
+              filesCreated: [],
+              packagesInstalled: [],
+              commandsExecuted: [],
+              errors: [
+                `Sandbox creation failed: ${
+                  createError instanceof Error
+                    ? createError.message
+                    : "Unknown error"
+                }`,
+              ],
+            },
+            explanation: parsed.explanation,
+            structure: parsed.structure,
+            parsedFiles: parsed.files,
+            message: `Parsed ${parsed.files.length} files but couldn't apply them - sandbox creation failed.`,
           },
-          explanation: parsed.explanation,
-          structure: parsed.structure,
-          parsedFiles: parsed.files,
-          message: `Parsed ${parsed.files.length} files but couldn't apply them - sandbox creation failed.`
-        }, { status: 500 });
+          { status: 500 }
+        );
       }
     }
 
@@ -406,65 +523,91 @@ export async function POST(request: NextRequest) {
         packagesAlreadyInstalled: [] as string[],
         packagesFailed: [] as string[],
         commandsExecuted: [] as string[],
-        errors: [] as string[]
+        errors: [] as string[],
       };
 
       try {
         await sendProgress({
-          type: 'start',
-          message: 'Starting code application...',
-          totalSteps: 3
+          type: "start",
+          message: "Starting code application...",
+          totalSteps: 3,
         });
         if (morphEnabled) {
-          await sendProgress({ type: 'info', message: 'Morph Fast Apply enabled' });
-          await sendProgress({ type: 'info', message: `Parsed ${morphEdits.length} Morph edits` });
+          await sendProgress({
+            type: "info",
+            message: "Morph Fast Apply enabled",
+          });
+          await sendProgress({
+            type: "info",
+            message: `Parsed ${morphEdits.length} Morph edits`,
+          });
           if (morphEdits.length === 0) {
-            console.warn('[apply-ai-code-stream] Morph enabled but no <edit> blocks found; falling back to full-file flow');
-            await sendProgress({ type: 'warning', message: 'Morph enabled but no <edit> blocks found; falling back to full-file flow' });
+            console.warn(
+              "[apply-ai-code-stream] Morph enabled but no <edit> blocks found; falling back to full-file flow"
+            );
+            await sendProgress({
+              type: "warning",
+              message:
+                "Morph enabled but no <edit> blocks found; falling back to full-file flow",
+            });
           }
         }
-        
+
         // Step 1: Install packages
         const packagesArray = Array.isArray(packages) ? packages : [];
-        const parsedPackages = Array.isArray(parsed.packages) ? parsed.packages : [];
+        const parsedPackages = Array.isArray(parsed.packages)
+          ? parsed.packages
+          : [];
 
         // Combine and deduplicate packages
-        const allPackages = [...packagesArray.filter(pkg => pkg && typeof pkg === 'string'), ...parsedPackages];
+        const allPackages = [
+          ...packagesArray.filter((pkg) => pkg && typeof pkg === "string"),
+          ...parsedPackages,
+        ];
 
         // Use Set to remove duplicates, then filter out pre-installed packages
         const uniquePackages = [...new Set(allPackages)]
-          .filter(pkg => pkg && typeof pkg === 'string' && pkg.trim() !== '') // Remove empty strings
-          .filter(pkg => pkg !== 'react' && pkg !== 'react-dom'); // Filter pre-installed
+          .filter((pkg) => pkg && typeof pkg === "string" && pkg.trim() !== "") // Remove empty strings
+          .filter((pkg) => pkg !== "react" && pkg !== "react-dom"); // Filter pre-installed
 
         // Log if we found duplicates
         if (allPackages.length !== uniquePackages.length) {
-          console.log(`[apply-ai-code-stream] Removed ${allPackages.length - uniquePackages.length} duplicate packages`);
+          console.log(
+            `[apply-ai-code-stream] Removed ${
+              allPackages.length - uniquePackages.length
+            } duplicate packages`
+          );
           console.log(`[apply-ai-code-stream] Original packages:`, allPackages);
-          console.log(`[apply-ai-code-stream] Deduplicated packages:`, uniquePackages);
+          console.log(
+            `[apply-ai-code-stream] Deduplicated packages:`,
+            uniquePackages
+          );
         }
 
         if (uniquePackages.length > 0) {
           await sendProgress({
-            type: 'step',
+            type: "step",
             step: 1,
             message: `Installing ${uniquePackages.length} packages...`,
-            packages: uniquePackages
+            packages: uniquePackages,
           });
 
           // Use streaming package installation
           try {
             // Construct the API URL properly for both dev and production
-            const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-            const host = req.headers.get('host') || 'localhost:3000';
+            const protocol =
+              process.env.NODE_ENV === "production" ? "https" : "http";
+            const host = req.headers.get("host") || "localhost:3000";
             const apiUrl = `${protocol}://${host}/api/install-packages`;
 
             const installResponse = await fetch(apiUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 packages: uniquePackages,
-                sandboxId: sandboxId || providerInstance.getSandboxInfo()?.sandboxId
-              })
+                sandboxId:
+                  sandboxId || providerInstance.getSandboxInfo()?.sandboxId,
+              }),
             });
 
             if (installResponse.ok && installResponse.body) {
@@ -477,96 +620,158 @@ export async function POST(request: NextRequest) {
 
                 const chunk = decoder.decode(value);
                 if (!chunk) continue;
-                const lines = chunk.split('\n');
+                const lines = chunk.split("\n");
 
                 for (const line of lines) {
-                  if (line.startsWith('data: ')) {
+                  if (line.startsWith("data: ")) {
                     try {
                       const data = JSON.parse(line.slice(6));
 
                       // Forward package installation progress
                       await sendProgress({
-                        type: 'package-progress',
-                        ...data
+                        type: "package-progress",
+                        ...data,
                       });
 
                       // Track results
-                      if (data.type === 'success' && data.installedPackages) {
+                      if (data.type === "success" && data.installedPackages) {
                         results.packagesInstalled = data.installedPackages;
                       }
                     } catch (parseError) {
-                      console.debug('Error parsing terminal output:', parseError);
+                      console.debug(
+                        "Error parsing terminal output:",
+                        parseError
+                      );
                     }
                   }
                 }
               }
             }
           } catch (error) {
-            console.error('[apply-ai-code-stream] Error installing packages:', error);
+            console.error(
+              "[apply-ai-code-stream] Error installing packages:",
+              error
+            );
             await sendProgress({
-              type: 'warning',
-              message: `Package installation skipped (${(error as Error).message}). Continuing with file creation...`
+              type: "warning",
+              message: `Package installation skipped (${
+                (error as Error).message
+              }). Continuing with file creation...`,
             });
-            results.errors.push(`Package installation failed: ${(error as Error).message}`);
+            results.errors.push(
+              `Package installation failed: ${(error as Error).message}`
+            );
           }
         } else {
           await sendProgress({
-            type: 'step',
+            type: "step",
             step: 1,
-            message: 'No additional packages to install, skipping...'
+            message: "No additional packages to install, skipping...",
           });
         }
 
         // Step 2: Create/update files
         const filesArray = Array.isArray(parsed.files) ? parsed.files : [];
         await sendProgress({
-          type: 'step',
+          type: "step",
           step: 2,
-          message: `Creating ${filesArray.length} files...`
+          message: `Creating ${filesArray.length} files...`,
         });
 
         // Filter out config files that shouldn't be created
-        const configFiles = ['tailwind.config.js', 'vite.config.js', 'package.json', 'package-lock.json', 'tsconfig.json', 'postcss.config.js'];
-        let filteredFiles = filesArray.filter(file => {
-          if (!file || typeof file !== 'object') return false;
-          const fileName = (file.path || '').split('/').pop() || '';
+        const configFiles = [
+          "tailwind.config.js",
+          "vite.config.js",
+          "package.json",
+          "package-lock.json",
+          "tsconfig.json",
+          "postcss.config.js",
+        ];
+        let filteredFiles = filesArray.filter((file) => {
+          if (!file || typeof file !== "object") return false;
+          const fileName = (file.path || "").split("/").pop() || "";
           return !configFiles.includes(fileName);
         });
 
         // If Morph is enabled and we have edits, apply them before file writes
         const morphUpdatedPaths = new Set<string>();
         if (morphEnabled && morphEdits.length > 0) {
-          const morphSandbox = (global as any).activeSandbox || providerInstance;
+          const morphSandbox =
+            (global as any).activeSandbox || providerInstance;
           if (!morphSandbox) {
-            console.warn('[apply-ai-code-stream] No sandbox available to apply Morph edits');
-            await sendProgress({ type: 'warning', message: 'No sandbox available to apply Morph edits' });
+            console.warn(
+              "[apply-ai-code-stream] No sandbox available to apply Morph edits"
+            );
+            await sendProgress({
+              type: "warning",
+              message: "No sandbox available to apply Morph edits",
+            });
           } else {
-            await sendProgress({ type: 'info', message: `Applying ${morphEdits.length} fast edits via Morph...` });
+            await sendProgress({
+              type: "info",
+              message: `Applying ${morphEdits.length} fast edits via Morph...`,
+            });
             for (const [idx, edit] of morphEdits.entries()) {
               try {
-                await sendProgress({ type: 'file-progress', current: idx + 1, total: morphEdits.length, fileName: edit.targetFile, action: 'morph-applying' });
+                await sendProgress({
+                  type: "file-progress",
+                  current: idx + 1,
+                  total: morphEdits.length,
+                  fileName: edit.targetFile,
+                  action: "morph-applying",
+                });
                 const result = await applyMorphEditToFile({
                   sandbox: morphSandbox,
                   targetPath: edit.targetFile,
                   instructions: edit.instructions,
-                  updateSnippet: edit.update
+                  updateSnippet: edit.update,
                 });
                 if (result.success && result.normalizedPath) {
-                  console.log('[apply-ai-code-stream] Morph updated', result.normalizedPath);
+                  console.log(
+                    "[apply-ai-code-stream] Morph updated",
+                    result.normalizedPath
+                  );
                   morphUpdatedPaths.add(result.normalizedPath);
-                  if (results.filesUpdated) results.filesUpdated.push(result.normalizedPath);
-                  await sendProgress({ type: 'file-complete', fileName: result.normalizedPath, action: 'morph-updated' });
+                  if (results.filesUpdated)
+                    results.filesUpdated.push(result.normalizedPath);
+                  await sendProgress({
+                    type: "file-complete",
+                    fileName: result.normalizedPath,
+                    action: "morph-updated",
+                  });
                 } else {
-                  const msg = result.error || 'Unknown Morph error';
-                  console.error('[apply-ai-code-stream] Morph apply failed for', edit.targetFile, msg);
-                  if (results.errors) results.errors.push(`Morph apply failed for ${edit.targetFile}: ${msg}`);
-                  await sendProgress({ type: 'file-error', fileName: edit.targetFile, error: msg });
+                  const msg = result.error || "Unknown Morph error";
+                  console.error(
+                    "[apply-ai-code-stream] Morph apply failed for",
+                    edit.targetFile,
+                    msg
+                  );
+                  if (results.errors)
+                    results.errors.push(
+                      `Morph apply failed for ${edit.targetFile}: ${msg}`
+                    );
+                  await sendProgress({
+                    type: "file-error",
+                    fileName: edit.targetFile,
+                    error: msg,
+                  });
                 }
               } catch (err) {
                 const msg = (err as Error).message;
-                console.error('[apply-ai-code-stream] Morph apply exception for', edit.targetFile, msg);
-                if (results.errors) results.errors.push(`Morph apply exception for ${edit.targetFile}: ${msg}`);
-                await sendProgress({ type: 'file-error', fileName: edit.targetFile, error: msg });
+                console.error(
+                  "[apply-ai-code-stream] Morph apply exception for",
+                  edit.targetFile,
+                  msg
+                );
+                if (results.errors)
+                  results.errors.push(
+                    `Morph apply exception for ${edit.targetFile}: ${msg}`
+                  );
+                await sendProgress({
+                  type: "file-error",
+                  fileName: edit.targetFile,
+                  error: msg,
+                });
               }
             }
           }
@@ -574,62 +779,78 @@ export async function POST(request: NextRequest) {
 
         // Avoid overwriting Morph-updated files in the file write loop
         if (morphUpdatedPaths.size > 0) {
-          filteredFiles = filteredFiles.filter(file => {
+          filteredFiles = filteredFiles.filter((file) => {
             if (!file?.path) return true;
-            let normalizedPath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
-            const fileName = normalizedPath.split('/').pop() || '';
-            if (!normalizedPath.startsWith('src/') &&
-                !normalizedPath.startsWith('public/') &&
-                normalizedPath !== 'index.html' &&
-                !configFiles.includes(fileName)) {
-              normalizedPath = 'src/' + normalizedPath;
+            let normalizedPath = file.path.startsWith("/")
+              ? file.path.slice(1)
+              : file.path;
+            const fileName = normalizedPath.split("/").pop() || "";
+            if (
+              !normalizedPath.startsWith("src/") &&
+              !normalizedPath.startsWith("public/") &&
+              normalizedPath !== "index.html" &&
+              !configFiles.includes(fileName)
+            ) {
+              normalizedPath = "src/" + normalizedPath;
             }
             return !morphUpdatedPaths.has(normalizedPath);
           });
         }
-        
+
         for (const [index, file] of filteredFiles.entries()) {
           try {
             // Send progress for each file
             await sendProgress({
-              type: 'file-progress',
+              type: "file-progress",
               current: index + 1,
               total: filteredFiles.length,
               fileName: file.path,
-              action: 'creating'
+              action: "creating",
             });
 
             // Normalize the file path
             let normalizedPath = file.path;
-            if (normalizedPath.startsWith('/')) {
+            if (normalizedPath.startsWith("/")) {
               normalizedPath = normalizedPath.substring(1);
             }
-            if (!normalizedPath.startsWith('src/') &&
-              !normalizedPath.startsWith('public/') &&
-              normalizedPath !== 'index.html' &&
-              !configFiles.includes(normalizedPath.split('/').pop() || '')) {
-              normalizedPath = 'src/' + normalizedPath;
+            if (
+              !normalizedPath.startsWith("src/") &&
+              !normalizedPath.startsWith("public/") &&
+              normalizedPath !== "index.html" &&
+              !configFiles.includes(normalizedPath.split("/").pop() || "")
+            ) {
+              normalizedPath = "src/" + normalizedPath;
             }
 
             const isUpdate = global.existingFiles.has(normalizedPath);
 
             // Remove any CSS imports from JSX/JS files (we're using Tailwind)
             let fileContent = file.content;
-            if (file.path.endsWith('.jsx') || file.path.endsWith('.js') || file.path.endsWith('.tsx') || file.path.endsWith('.ts')) {
-              fileContent = fileContent.replace(/import\s+['"]\.\/[^'"]+\.css['"];?\s*\n?/g, '');
+            if (
+              file.path.endsWith(".jsx") ||
+              file.path.endsWith(".js") ||
+              file.path.endsWith(".tsx") ||
+              file.path.endsWith(".ts")
+            ) {
+              fileContent = fileContent.replace(
+                /import\s+['"]\.\/[^'"]+\.css['"];?\s*\n?/g,
+                ""
+              );
             }
 
             // Fix common Tailwind CSS errors in CSS files
-            if (file.path.endsWith('.css')) {
+            if (file.path.endsWith(".css")) {
               // Replace shadow-3xl with shadow-2xl (shadow-3xl doesn't exist)
-              fileContent = fileContent.replace(/shadow-3xl/g, 'shadow-2xl');
+              fileContent = fileContent.replace(/shadow-3xl/g, "shadow-2xl");
               // Replace any other non-existent shadow utilities
-              fileContent = fileContent.replace(/shadow-4xl/g, 'shadow-2xl');
-              fileContent = fileContent.replace(/shadow-5xl/g, 'shadow-2xl');
+              fileContent = fileContent.replace(/shadow-4xl/g, "shadow-2xl");
+              fileContent = fileContent.replace(/shadow-5xl/g, "shadow-2xl");
             }
 
             // Create directory if needed
-            const dirPath = normalizedPath.includes('/') ? normalizedPath.substring(0, normalizedPath.lastIndexOf('/')) : '';
+            const dirPath = normalizedPath.includes("/")
+              ? normalizedPath.substring(0, normalizedPath.lastIndexOf("/"))
+              : "";
             if (dirPath) {
               await providerInstance.runCommand(`mkdir -p ${dirPath}`);
             }
@@ -641,51 +862,58 @@ export async function POST(request: NextRequest) {
             if (global.sandboxState?.fileCache) {
               global.sandboxState.fileCache.files[normalizedPath] = {
                 content: fileContent,
-                lastModified: Date.now()
+                lastModified: Date.now(),
               };
             }
 
             if (isUpdate) {
-              if (results.filesUpdated) results.filesUpdated.push(normalizedPath);
+              if (results.filesUpdated)
+                results.filesUpdated.push(normalizedPath);
             } else {
-              if (results.filesCreated) results.filesCreated.push(normalizedPath);
-              if (global.existingFiles) global.existingFiles.add(normalizedPath);
+              if (results.filesCreated)
+                results.filesCreated.push(normalizedPath);
+              if (global.existingFiles)
+                global.existingFiles.add(normalizedPath);
             }
 
             await sendProgress({
-              type: 'file-complete',
+              type: "file-complete",
               fileName: normalizedPath,
-              action: isUpdate ? 'updated' : 'created'
+              action: isUpdate ? "updated" : "created",
             });
           } catch (error) {
             if (results.errors) {
-              results.errors.push(`Failed to create ${file.path}: ${(error as Error).message}`);
+              results.errors.push(
+                `Failed to create ${file.path}: ${(error as Error).message}`
+              );
             }
             await sendProgress({
-              type: 'file-error',
+              type: "file-error",
               fileName: file.path,
-              error: (error as Error).message
+              error: (error as Error).message,
             });
           }
         }
 
         // Step 3: Execute commands
-        const commandsArray = Array.isArray(parsed.commands) ? parsed.commands : [];
+        const commandsArray = Array.isArray(parsed.commands)
+          ? parsed.commands
+          : [];
         if (commandsArray.length > 0) {
           await sendProgress({
-            type: 'step',
+            type: "step",
             step: 3,
-            message: `Executing ${commandsArray.length} commands...`
+            message: `Executing ${commandsArray.length} commands...`,
           });
 
           for (const [index, cmd] of commandsArray.entries()) {
             try {
               await sendProgress({
-                type: 'command-progress',
+                type: "command-progress",
                 current: index + 1,
                 total: parsed.commands.length,
                 command: cmd,
-                action: 'executing'
+                action: "executing",
               });
 
               // Use provider runCommand
@@ -697,19 +925,19 @@ export async function POST(request: NextRequest) {
 
               if (stdout) {
                 await sendProgress({
-                  type: 'command-output',
+                  type: "command-output",
                   command: cmd,
                   output: stdout,
-                  stream: 'stdout'
+                  stream: "stdout",
                 });
               }
 
               if (stderr) {
                 await sendProgress({
-                  type: 'command-output',
+                  type: "command-output",
                   command: cmd,
                   output: stderr,
-                  stream: 'stderr'
+                  stream: "stderr",
                 });
               }
 
@@ -718,31 +946,98 @@ export async function POST(request: NextRequest) {
               }
 
               await sendProgress({
-                type: 'command-complete',
+                type: "command-complete",
                 command: cmd,
                 exitCode: result.exitCode,
-                success: result.exitCode === 0
+                success: result.exitCode === 0,
               });
             } catch (error) {
               if (results.errors) {
-                results.errors.push(`Failed to execute ${cmd}: ${(error as Error).message}`);
+                results.errors.push(
+                  `Failed to execute ${cmd}: ${(error as Error).message}`
+                );
               }
               await sendProgress({
-                type: 'command-error',
+                type: "command-error",
                 command: cmd,
-                error: (error as Error).message
+                error: (error as Error).message,
               });
             }
           }
         }
 
+        // Step 4: Restart Vite if files were changed
+        if (
+          results.filesCreated.length > 0 ||
+          results.filesUpdated.length > 0
+        ) {
+          await sendProgress({
+            type: "step",
+            step: 4,
+            message: "Restarting Vite dev server...",
+          });
+
+          try {
+            // Check provider type and restart Vite appropriately
+            const sandboxInfo = provider.getSandboxInfo();
+            if (sandboxInfo) {
+              const workDir =
+                sandboxInfo.provider === "vercel"
+                  ? "/vercel/sandbox"
+                  : "/home/user/app";
+
+              // Kill existing Vite process
+              try {
+                await provider.runCommand('pkill -9 -f "vite" || true');
+                console.log(
+                  "[apply-ai-code-stream] Killed existing Vite process"
+                );
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+              } catch (e) {
+                console.log("[apply-ai-code-stream] No existing Vite to kill");
+              }
+
+              // Clear logs
+              try {
+                await provider.runCommand(
+                  'sh -c "rm -f /tmp/vite.log && touch /tmp/vite.log"'
+                );
+              } catch (e) {
+                // Ignore
+              }
+
+              // Start Vite
+              await provider.runCommand(
+                `sh -c "cd ${workDir} && nohup npm run dev > /tmp/vite.log 2>&1 &"`
+              );
+              console.log("[apply-ai-code-stream] Vite restart command issued");
+
+              await sendProgress({
+                type: "info",
+                message:
+                  "Vite dev server restarted (will be ready in a few seconds)",
+              });
+
+              // Wait a bit for Vite to start
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+            }
+          } catch (error) {
+            console.error("[apply-ai-code-stream] Vite restart error:", error);
+            await sendProgress({
+              type: "warning",
+              message:
+                "Vite restart encountered an issue, but files were applied successfully",
+            });
+          }
+        }
+
         // Send final results
         await sendProgress({
-          type: 'complete',
+          type: "complete",
           results,
           explanation: parsed.explanation,
           structure: parsed.structure,
-          message: `Successfully applied ${results.filesCreated.length} files`
+          message: `Successfully applied ${results.filesCreated.length} files`,
         });
 
         // Track applied files in conversation state
@@ -750,30 +1045,31 @@ export async function POST(request: NextRequest) {
           const messages = global.conversationState.context.messages;
           if (messages.length > 0) {
             const lastMessage = messages[messages.length - 1];
-            if (lastMessage.role === 'user') {
+            if (lastMessage.role === "user") {
               lastMessage.metadata = {
                 ...lastMessage.metadata,
-                editedFiles: results.filesCreated
+                editedFiles: results.filesCreated,
               };
             }
           }
 
           // Track applied code in project evolution
           if (global.conversationState.context.projectEvolution) {
-            global.conversationState.context.projectEvolution.majorChanges.push({
-              timestamp: Date.now(),
-              description: parsed.explanation || 'Code applied',
-              filesAffected: results.filesCreated || []
-            });
+            global.conversationState.context.projectEvolution.majorChanges.push(
+              {
+                timestamp: Date.now(),
+                description: parsed.explanation || "Code applied",
+                filesAffected: results.filesCreated || [],
+              }
+            );
           }
 
           global.conversationState.lastUpdated = Date.now();
         }
-
       } catch (error) {
         await sendProgress({
-          type: 'error',
-          error: (error as Error).message
+          type: "error",
+          error: (error as Error).message,
         });
       } finally {
         await writer.close();
@@ -783,16 +1079,18 @@ export async function POST(request: NextRequest) {
     // Return the stream
     return new Response(stream.readable, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       },
     });
-
   } catch (error) {
-    console.error('Apply AI code stream error:', error);
+    console.error("Apply AI code stream error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to parse AI code' },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to parse AI code",
+      },
       { status: 500 }
     );
   }

@@ -219,7 +219,7 @@ function AISandboxPage() {
 
         // Set the prompt as context for generation
         setHomeContextInput(storedPrompt);
-        
+
         if (storedModel) {
           setAiModel(storedModel);
         }
@@ -319,17 +319,21 @@ function AISandboxPage() {
       try {
         if (sandboxIdParam) {
           console.log("[home] Attempting to restore sandbox:", sandboxIdParam);
-          
+
           // First check if the sandbox is still alive
           try {
             const statusResponse = await fetch("/api/sandbox-status");
             const statusData = await statusResponse.json();
-            
-            if (statusData.active && statusData.healthy && statusData.sandboxData) {
+
+            if (
+              statusData.active &&
+              statusData.healthy &&
+              statusData.sandboxData
+            ) {
               console.log("[home] Existing sandbox is healthy, reusing it");
               setSandboxData(statusData.sandboxData);
               updateStatus("Sandbox active", true);
-              
+
               // Try to load the sandbox URL to verify it's really working
               try {
                 const urlCheck = await fetch(statusData.sandboxData.url, {
@@ -338,19 +342,26 @@ function AISandboxPage() {
                 });
                 console.log("[home] Sandbox URL verified");
               } catch (urlError) {
-                console.error("[home] Sandbox URL check failed, will create new one");
+                console.error(
+                  "[home] Sandbox URL check failed, will create new one"
+                );
                 throw new Error("Sandbox URL not responding");
               }
             } else {
               throw new Error("Sandbox not healthy or not found");
             }
           } catch (statusError) {
-            console.log("[home] Sandbox restoration failed, creating new one:", statusError);
+            console.log(
+              "[home] Sandbox restoration failed, creating new one:",
+              statusError
+            );
             // Remove the old sandbox ID from URL
             const newParams = new URLSearchParams(searchParams.toString());
             newParams.delete("sandbox");
-            router.replace(`/generation?${newParams.toString()}`, { scroll: false });
-            
+            router.replace(`/generation?${newParams.toString()}`, {
+              scroll: false,
+            });
+
             // Create fresh sandbox
             sandboxCreated = true;
             await createSandbox(true);
@@ -432,15 +443,20 @@ function AISandboxPage() {
     const autoStart = sessionStorage.getItem("autoStart");
     // Check if we have either URL or text prompt and sandbox is ready
     const hasPromptOrUrl = homeUrlInput || homeContextInput;
-    
-    if (autoStart === "true" && !showHomeScreen && hasPromptOrUrl && sandboxData) {
+
+    if (
+      autoStart === "true" &&
+      !showHomeScreen &&
+      hasPromptOrUrl &&
+      sandboxData
+    ) {
       // Clear all session storage items related to initialization
       sessionStorage.removeItem("autoStart");
       sessionStorage.removeItem("userPrompt");
       sessionStorage.removeItem("targetUrl");
       sessionStorage.removeItem("selectedStyle");
       sessionStorage.removeItem("selectedModel");
-      
+
       // Small delay to ensure everything is ready
       setTimeout(() => {
         console.log(
@@ -505,13 +521,17 @@ function AISandboxPage() {
 
         // Check for 410 Gone error
         if (response.status === 410) {
-          console.error("[iframe-monitor] Sandbox returned 410 Gone - sandbox expired");
+          console.error(
+            "[iframe-monitor] Sandbox returned 410 Gone - sandbox expired"
+          );
           has410Error = true;
           errorCount = maxErrors; // Force immediate action
         } else if (!response.ok && response.status !== 0) {
           // Count non-CORS errors (status 0 is CORS, which is expected)
           errorCount++;
-          console.error(`[iframe-monitor] Sandbox check failed with status ${response.status} (${errorCount}/${maxErrors})`);
+          console.error(
+            `[iframe-monitor] Sandbox check failed with status ${response.status} (${errorCount}/${maxErrors})`
+          );
         } else {
           // Success - reset error counter
           errorCount = 0;
@@ -520,10 +540,16 @@ function AISandboxPage() {
       } catch (error: any) {
         // Network errors or timeouts
         errorCount++;
-        console.error(`[iframe-monitor] Sandbox check failed (${errorCount}/${maxErrors}):`, error);
+        console.error(
+          `[iframe-monitor] Sandbox check failed (${errorCount}/${maxErrors}):`,
+          error
+        );
 
         // Check if the error message contains 410
-        if (error.message?.includes("410") || error.toString().includes("410")) {
+        if (
+          error.message?.includes("410") ||
+          error.toString().includes("410")
+        ) {
           has410Error = true;
           errorCount = maxErrors;
         }
@@ -532,13 +558,17 @@ function AISandboxPage() {
       // Take action if threshold reached
       if (errorCount >= maxErrors) {
         errorCount = 0; // Reset counter
-        
+
         if (has410Error) {
-          console.log("[iframe-monitor] 410 error detected - recreating sandbox");
+          console.log(
+            "[iframe-monitor] 410 error detected - recreating sandbox"
+          );
           has410Error = false;
           await handleSandboxTimeout();
         } else {
-          console.log("[iframe-monitor] Multiple failures detected - attempting Vite restart");
+          console.log(
+            "[iframe-monitor] Multiple failures detected - attempting Vite restart"
+          );
           await checkAndRestartVite();
         }
       }
@@ -711,19 +741,21 @@ function AISandboxPage() {
           "[checkSandboxStatus] Sandbox reported as active, verifying URL:",
           data.sandboxData.url
         );
-        
+
         // Verify the sandbox URL is actually working
         try {
           const urlCheckResponse = await fetch(data.sandboxData.url, {
             method: "HEAD",
             signal: AbortSignal.timeout(5000),
           });
-          
+
           if (urlCheckResponse.status === 410) {
-            console.error("[checkSandboxStatus] Sandbox URL returned 410 - sandbox is dead");
+            console.error(
+              "[checkSandboxStatus] Sandbox URL returned 410 - sandbox is dead"
+            );
             setSandboxData(null);
             updateStatus("Sandbox expired", false);
-            
+
             // Trigger recreation
             addChatMessage(
               "⚠️ Previous sandbox expired. Creating a new one...",
@@ -733,17 +765,25 @@ function AISandboxPage() {
             return;
           } else if (urlCheckResponse.ok || urlCheckResponse.status === 0) {
             // Status 0 is CORS, which is expected - sandbox is likely working
-            console.log("[checkSandboxStatus] Sandbox URL verified, setting sandboxData");
+            console.log(
+              "[checkSandboxStatus] Sandbox URL verified, setting sandboxData"
+            );
             setSandboxData(data.sandboxData);
             updateStatus("Sandbox active", true);
           } else {
-            console.warn("[checkSandboxStatus] Sandbox URL returned unexpected status:", urlCheckResponse.status);
+            console.warn(
+              "[checkSandboxStatus] Sandbox URL returned unexpected status:",
+              urlCheckResponse.status
+            );
             // Still set the data, but mark as potentially unhealthy
             setSandboxData(data.sandboxData);
             updateStatus("Sandbox may be unhealthy", false);
           }
         } catch (urlError) {
-          console.error("[checkSandboxStatus] Failed to verify sandbox URL:", urlError);
+          console.error(
+            "[checkSandboxStatus] Failed to verify sandbox URL:",
+            urlError
+          );
           // Network error or timeout - sandbox might be starting
           setSandboxData(data.sandboxData);
           updateStatus("Sandbox starting", false);
@@ -855,6 +895,15 @@ Tip: I automatically detect and install npm packages from your code imports (lik
         setTimeout(() => {
           if (iframeRef.current) {
             iframeRef.current.src = data.url;
+
+            // Generate initial traffic to signal activity
+            setTimeout(() => {
+              if (data.url) {
+                fetch(data.url, { method: "HEAD", mode: "no-cors" }).catch(
+                  () => {}
+                ); // Ignore errors - just generating traffic
+              }
+            }, 2000);
           }
         }, 100);
 
@@ -884,7 +933,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
 
     console.log("[keepalive] Starting sandbox keep-alive pings");
 
-    // Ping every 2 minutes to keep sandbox active
+    // Ping every 45 seconds to keep sandbox active and prevent idle timeout
     keepAliveIntervalRef.current = setInterval(async () => {
       try {
         const response = await fetch("/api/sandbox-keepalive", {
@@ -894,22 +943,35 @@ Tip: I automatically detect and install npm packages from your code imports (lik
 
         const data = await response.json();
 
-        if (!response.ok || data.shouldRecreate) {
-          console.error("[keepalive] Sandbox unhealthy, needs recreation");
+        // Only recreate if explicitly told to (critical errors only)
+        if (data.shouldRecreate === true) {
+          console.error(
+            "[keepalive] Sandbox critically unhealthy, needs recreation"
+          );
           clearInterval(keepAliveIntervalRef.current!);
           keepAliveIntervalRef.current = null;
-          
+
           // Only auto-recreate if we're not already in the process
           if (!sandboxRecreatingRef.current && !loading) {
             handleSandboxTimeout();
           }
+        } else if (!response.ok) {
+          // Non-critical error - log but don't recreate
+          console.warn(
+            "[keepalive] Sandbox health check had issues but not recreating:",
+            data.message
+          );
         } else {
           console.log("[keepalive] Sandbox is healthy");
         }
       } catch (error) {
-        console.error("[keepalive] Keep-alive ping failed:", error);
+        console.error(
+          "[keepalive] Keep-alive ping failed (network error):",
+          error
+        );
+        // Don't recreate on network errors - might be temporary
       }
-    }, 120000); // 2 minutes
+    }, 45000); // 45 seconds (more aggressive to prevent idle timeout)
   };
 
   const stopSandboxKeepAlive = () => {
@@ -938,7 +1000,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
       if (response.ok) {
         const result = await response.json();
         console.log("[vite-check] Vite restart result:", result);
-        
+
         addChatMessage(
           "🔄 Vite server restarted. Refreshing preview...",
           "system"
@@ -977,16 +1039,16 @@ Tip: I automatically detect and install npm packages from your code imports (lik
 
     try {
       stopSandboxKeepAlive();
-      
+
       // Create new sandbox
       const newSandboxData = await createSandbox(false);
-      
+
       if (newSandboxData) {
         addChatMessage(
           "✅ New sandbox created successfully! You can continue working.",
           "system"
         );
-        
+
         // Restart keep-alive
         startSandboxKeepAlive();
       }
@@ -4161,8 +4223,18 @@ Build a professional, polished website that fulfills the user's request.`;
         <div className="bg-black/40 backdrop-blur-xl border-b border-white/10 px-6 py-3 flex items-center justify-between shadow-2xl">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              <svg
+                className="w-5 h-5 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
               </svg>
             </div>
             <h1 className="text-lg font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
@@ -4178,7 +4250,9 @@ Build a professional, polished website that fulfills the user's request.`;
             {status.active && (
               <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-lg shadow-emerald-400/50"></div>
-                <span className="text-xs text-emerald-400 font-medium">Live</span>
+                <span className="text-xs text-emerald-400 font-medium">
+                  Live
+                </span>
               </div>
             )}
           </div>
